@@ -11,26 +11,36 @@ import (
 )
 
 type tableMetrics struct {
-	schemaName  string
-	tableName string
-	rowCount    float64
-	dataSize    float64
-	indexSize   float64
-	totalSizeMB float64
+	schemaName string
+	tableName  string
+	metrics    []Metric
 }
 
-type simpleMetric struct {
+type Metric struct {
 	name  string
 	value float64
 }
 
-func establishDBConnection() sql.DB {
-	user := "root"
-	pass := os.Getenv("MYSQL_ROOT_PW")
-	host := "localhost"
-	port := "3306"
-	mysqlDSN := fmt.Sprintf("%s:%s@tcp(%s:%s)/information_schema",user,pass,host,port)
-	db, err := sql.Open("mysql", mysqlDSN)
+type connectionParams struct {
+	user      string
+	password  string
+	hostName  string
+	port      string
+	defaultDB string
+}
+
+func (con *connectionParams) mysqlDSN() (connectionDSN string) {
+	connectionDSN = fmt.Sprintf("%s:%s@tcp(%s:%s)/%s",
+		con.user,
+		con.password,
+		con.hostName,
+		con.port,
+		con.defaultDB)
+	return
+}
+
+func establishDBConnection(connectionDetails connectionParams) sql.DB {
+	db, err := sql.Open("mysql", connectionDetails.mysqlDSN())
 	if err != nil {
 		log.Fatalf("Could not establish DB connection, %s", err)
 		os.Exit(1)
@@ -42,16 +52,15 @@ func establishDBConnection() sql.DB {
 	return *db
 }
 
-func (metrics tableMetrics) reportableValues() []simpleMetric {
-	v1 := simpleMetric{"row_count", metrics.rowCount}
-	v2 := simpleMetric{"data_size", metrics.dataSize}
-	v3 := simpleMetric{"index_size", metrics.indexSize}
-	v4 := simpleMetric{"total_size", metrics.totalSizeMB}
-	return []simpleMetric{v1, v2, v3, v4}
-}
-
 func gatherTableMetrics(databaseName string, mysql sql.DB) (metricList []tableMetrics) {
-	metrics := tableMetrics{}
+	tblMetrics := tableMetrics{}
+	var (
+		rowCount float64
+		dataSize float64
+		totalSizeMB float64
+		indexSize float64
+	)
+	log.Printf("Gathering metrics for database: %s", databaseName)
 	rows, err := mysql.Query(
 		"select table_schema,table_name,table_rows,data_length,index_length from tables where table_schema = ?",
 		databaseName)
@@ -60,18 +69,20 @@ func gatherTableMetrics(databaseName string, mysql sql.DB) (metricList []tableMe
 	}
 	defer rows.Close()
 	for rows.Next() {
-		rows.Scan(&metrics.schemaName, &metrics.tableName, &metrics.rowCount, &metrics.dataSize, &metrics.indexSize)
-		metrics.totalSizeMB = float64(float64(metrics.dataSize + metrics.indexSize) / 1024 / 1024)
-		metricList = append(metricList, metrics)
+		rows.Scan(&tblMetrics.schemaName, &tblMetrics.tableName, &rowCount, &dataSize, &indexSize)
+		totalSizeMB = float64(float64(dataSize + indexSize) / 1024 / 1024)
+		tblMetrics.metrics = []Metric{{"row_count", rowCount}, {"data_size", dataSize},
+			{"index_size", indexSize}, {"total_size", totalSizeMB}}
+		metricList = append(metricList, tblMetrics)
 		fmt.Printf("schema: %s, name: %s, rows: %v, datassize: %.0f, indexsize: %v, totalsize: %.2f MB\n",
-			metrics.schemaName, metrics.tableName,
-			metrics.rowCount, metrics.dataSize, metrics.indexSize, metrics.totalSizeMB)
+			tblMetrics.schemaName, tblMetrics.tableName,
+			rowCount, dataSize, indexSize, totalSizeMB)
 	}
 	return
 }
 
 func metricPayload(metricGroup tableMetrics, timestamp float64) (payloads []datadog.Metric) {
-	tableMetrics := metricGroup.reportableValues()
+	tableMetrics := metricGroup.metrics
 	for _, tableMetric := range tableMetrics {
 		payloads = append(payloads, datadog.Metric{
 			Metric: fmt.Sprintf("rds.db.table_metrics.%s", tableMetric.name),
@@ -87,23 +98,32 @@ func MetricTags(metricGroup *tableMetrics) []string {
 	return []string{
 		fmt.Sprintf("schema_name:%s", metricGroup.schemaName),
 		fmt.Sprintf("table_name:%s", metricGroup.tableName),
-		fmt.Sprintf("environment:%s","dev"),
+		fmt.Sprintf("environment:%s", "dev"),
 		//fmt.Sprintf("db_hostname:%s", DB_HOST),
 		//fmt.Sprintf("aws_account", AWS_ACCT),
 	}
 }
 
-func reportTableMetrics(metricList []tableMetrics) {
+func postTableMetrics(metricList []tableMetrics) {
+	if len(metricList) < 1 {
+		log.Print("No records returned")
+		return
+	}
 	ddClient := datadog.NewClient(os.Getenv("DD_API_KEY"), os.Getenv("DD_APP_KEY"))
 	timestamp := float64(time.Now().Unix())
 	for _, metricGroup := range metricList {
-		ddClient.PostMetrics(metricPayload(metricGroup,timestamp))
+		ddClient.PostMetrics(metricPayload(metricGroup, timestamp))
 	}
 
 }
 
 func main() {
-	mysqlConnection := establishDBConnection()
+	con := connectionParams{user:"root",
+		password:os.Getenv("MYSQL_ROOT_PW"),
+		hostName:"localhost",
+		port:"3306",
+		defaultDB: "information_schema"}
+	mysqlConnection := establishDBConnection(con)
 	metricList := gatherTableMetrics("counter_db", mysqlConnection)
-	reportTableMetrics(metricList)
+	postTableMetrics(metricList)
 }
