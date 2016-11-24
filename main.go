@@ -11,8 +11,7 @@ import (
 )
 
 type tableMetrics struct {
-	schemaName string
-	tableName  string
+	schemaName, tableName string
 	metrics    []Metric
 }
 
@@ -22,11 +21,7 @@ type Metric struct {
 }
 
 type connectionParams struct {
-	user      string
-	password  string
-	hostName  string
-	port      string
-	defaultDB string
+	user, password, hostName, port, defaultDB string
 }
 
 func (con *connectionParams) mysqlDSN() (connectionDSN string) {
@@ -55,10 +50,7 @@ func establishDBConnection(connectionDetails connectionParams) sql.DB {
 func gatherTableMetrics(databaseName string, mysql sql.DB) (metricList []tableMetrics) {
 	tblMetrics := tableMetrics{}
 	var (
-		rowCount float64
-		dataSize float64
-		totalSizeMB float64
-		indexSize float64
+		rowCount, dataSize, totalSizeMB, indexSize float64
 	)
 	log.Printf("Gathering metrics for database: %s", databaseName)
 	rows, err := mysql.Query(
@@ -125,5 +117,6 @@ func main() {
 		defaultDB: "information_schema"}
 	mysqlConnection := establishDBConnection(con)
 	metricList := gatherTableMetrics("counter_db", mysqlConnection)
-	postTableMetrics(metricList)
+	_ = metricList
+	//postTableMetrics(metricList)
 }
