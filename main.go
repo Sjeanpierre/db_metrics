@@ -12,7 +12,7 @@ import (
 
 type tableMetrics struct {
 	schemaName, tableName string
-	metrics    []Metric
+	metrics               []Metric
 }
 
 type Metric struct {
@@ -24,14 +24,13 @@ type connectionParams struct {
 	user, password, hostName, port, defaultDB string
 }
 
-func (con *connectionParams) mysqlDSN() (connectionDSN string) {
-	connectionDSN = fmt.Sprintf("%s:%s@tcp(%s:%s)/%s",
+func (con *connectionParams) mysqlDSN() string {
+	return fmt.Sprintf("%s:%s@tcp(%s:%s)/%s",
 		con.user,
 		con.password,
 		con.hostName,
 		con.port,
 		con.defaultDB)
-	return
 }
 
 func establishDBConnection(connectionDetails connectionParams) sql.DB {
@@ -63,8 +62,12 @@ func gatherTableMetrics(databaseName string, mysql sql.DB) (metricList []tableMe
 	for rows.Next() {
 		rows.Scan(&tblMetrics.schemaName, &tblMetrics.tableName, &rowCount, &dataSize, &indexSize)
 		totalSizeMB = float64(float64(dataSize + indexSize) / 1024 / 1024)
-		tblMetrics.metrics = []Metric{{"row_count", rowCount}, {"data_size", dataSize},
-			{"index_size", indexSize}, {"total_size", totalSizeMB}}
+		tblMetrics.metrics = []Metric{
+			{"row_count", rowCount},
+			{"data_size", dataSize},
+			{"index_size", indexSize},
+			{"total_size", totalSizeMB},
+		}
 		metricList = append(metricList, tblMetrics)
 		fmt.Printf("schema: %s, name: %s, rows: %v, datassize: %.0f, indexsize: %v, totalsize: %.2f MB\n",
 			tblMetrics.schemaName, tblMetrics.tableName,
@@ -110,11 +113,13 @@ func postTableMetrics(metricList []tableMetrics) {
 }
 
 func main() {
-	con := connectionParams{user:"root",
-		password:os.Getenv("MYSQL_ROOT_PW"),
-		hostName:"localhost",
+	con := connectionParams{
+		user: os.Getenv("DB_USER"),
+		password: os.Getenv("MYSQL_ROOT_PW"),
+		hostName: os.Getenv("DB_HOSTNAME"),
 		port:"3306",
-		defaultDB: "information_schema"}
+		defaultDB: "information_schema",
+	}
 	mysqlConnection := establishDBConnection(con)
 	metricList := gatherTableMetrics("counter_db", mysqlConnection)
 	_ = metricList
