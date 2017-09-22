@@ -118,7 +118,17 @@ func postTableMetrics(metricList []tableMetrics) {
 
 }
 
+func configCheck() {
+	envs := []string{"DB_USER", "MYSQL_ROOT_PW", "DB_HOSTNAME", "ENVIRONMENT", "DD_API_KEY", "DD_APP_KEY"}
+	for _, env := range envs {
+		if os.Getenv(env) == "" {
+			log.Fatalf("Required Environment variable %s is not set", env)
+		}
+	}
+}
+
 func main() {
+	configCheck()
 	con := connectionParams{
 		user:      os.Getenv("DB_USER"),
 		password:  os.Getenv("MYSQL_ROOT_PW"),
