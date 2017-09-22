@@ -99,7 +99,7 @@ func metricTags(metricGroup *tableMetrics) []string {
 	return []string{
 		fmt.Sprintf("schema_name:%s", metricGroup.schemaName),
 		fmt.Sprintf("table_name:%s", metricGroup.tableName),
-		fmt.Sprintf("environment:%s", "dev"),
+		fmt.Sprintf("environment:%s", os.Getenv("ENVIRONMENT")),
 		//fmt.Sprintf("db_hostname:%s", DB_HOST),
 		//fmt.Sprintf("aws_account", AWS_ACCT),
 	}
