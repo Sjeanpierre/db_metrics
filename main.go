@@ -2,28 +2,32 @@ package main
 
 import "database/sql"
 import (
+	"fmt"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/zorkian/go-datadog-api"
-	"os"
-	"fmt"
 	"log"
+	"os"
 	"time"
 )
 
+//Table Metrics is a container around metrics, a Schema Name and Table name has multiple metrics
 type tableMetrics struct {
 	schemaName, tableName string
 	metrics               []Metric
 }
 
+//Metric is an individual metric point from a table
 type Metric struct {
 	name  string
 	value float64
 }
 
+//Connection Params are used to store information needed to form MYSql DSN
 type connectionParams struct {
 	user, password, hostName, port, defaultDB string
 }
 
+//MySql DNS function takes a pointer to a connectionParams struct and returns a formatted DSN for MySQL
 func (con *connectionParams) mysqlDSN() string {
 	return fmt.Sprintf("%s:%s@tcp(%s:%s)/%s",
 		con.user,
@@ -33,15 +37,17 @@ func (con *connectionParams) mysqlDSN() string {
 		con.defaultDB)
 }
 
+// Establish DB connection takes connection parameters and establishes a connection to MySQl
+// The connection is then validated using the Ping function from the MySQL lib
 func establishDBConnection(connectionDetails connectionParams) sql.DB {
 	db, err := sql.Open("mysql", connectionDetails.mysqlDSN())
 	if err != nil {
-		log.Fatalf("Could not establish DB connection, %s", err)
+		log.Fatalf("Could not establish DB connection, %s", err) //todo, return error message up to caller
 		os.Exit(1)
 	}
 	err = db.Ping()
 	if err != nil {
-		log.Fatalf("Could not establish DB connection, %s", err)
+		log.Fatalf("Could not establish DB connection, %s", err) //todo, same as above
 	}
 	return *db
 }
@@ -61,7 +67,7 @@ func gatherTableMetrics(databaseName string, mysql sql.DB) (metricList []tableMe
 	defer rows.Close()
 	for rows.Next() {
 		rows.Scan(&tblMetrics.schemaName, &tblMetrics.tableName, &rowCount, &dataSize, &indexSize)
-		totalSizeMB = float64(float64(dataSize + indexSize) / 1024 / 1024)
+		totalSizeMB = float64(float64(dataSize+indexSize) / 1024 / 1024)
 		tblMetrics.metrics = []Metric{
 			{"row_count", rowCount},
 			{"data_size", dataSize},
@@ -82,8 +88,8 @@ func metricPayload(metricGroup tableMetrics, timestamp float64) (payloads []data
 		payloads = append(payloads, datadog.Metric{
 			Metric: fmt.Sprintf("rds.db.table_metrics.%s", tableMetric.name),
 			Points: []datadog.DataPoint{datadog.DataPoint{timestamp, tableMetric.value}},
-			Host: "sjp.db.local", //todo, add correct var
-			Tags: MetricTags(&metricGroup),
+			Host:   "sjp.db.local", //todo, add correct var
+			Tags:   MetricTags(&metricGroup),
 		})
 	}
 	return
@@ -114,10 +120,10 @@ func postTableMetrics(metricList []tableMetrics) {
 
 func main() {
 	con := connectionParams{
-		user: os.Getenv("DB_USER"),
-		password: os.Getenv("MYSQL_ROOT_PW"),
-		hostName: os.Getenv("DB_HOSTNAME"),
-		port:"3306",
+		user:      os.Getenv("DB_USER"),
+		password:  os.Getenv("MYSQL_ROOT_PW"),
+		hostName:  os.Getenv("DB_HOSTNAME"),
+		port:      "3306",
 		defaultDB: "information_schema",
 	}
 	mysqlConnection := establishDBConnection(con)
