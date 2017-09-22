@@ -89,13 +89,13 @@ func metricPayload(metricGroup tableMetrics, timestamp float64) (payloads []data
 			Metric: fmt.Sprintf("rds.db.table_metrics.%s", tableMetric.name),
 			Points: []datadog.DataPoint{datadog.DataPoint{timestamp, tableMetric.value}},
 			Host:   "sjp.db.local", //todo, add correct var
-			Tags:   MetricTags(&metricGroup),
+			Tags:   metricTags(&metricGroup),
 		})
 	}
 	return
 }
 
-func MetricTags(metricGroup *tableMetrics) []string {
+func metricTags(metricGroup *tableMetrics) []string {
 	return []string{
 		fmt.Sprintf("schema_name:%s", metricGroup.schemaName),
 		fmt.Sprintf("table_name:%s", metricGroup.tableName),
