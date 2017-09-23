@@ -8,6 +8,7 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	"log"
 	"os"
+	"strings"
 )
 
 //Table Metrics is a container around metrics, a Schema Name and Table name has multiple metrics
@@ -52,46 +53,46 @@ func establishDBConnection(connectionDetails connectionParams) sql.DB {
 	return *db
 }
 
-func gatherTableMetrics(databaseName string, mysql sql.DB) (metricList []tableMetrics) {
+func gatherTableMetrics(databaseName string, mysql sql.DB) (metricList []tableMetrics) { //todo, return error
 	tblMetrics := tableMetrics{}
 	var (
-		rowCount, dataSize, totalSizeMB, indexSize float64
+		rowCount, dataSize, totalSize, indexSize float64
 	)
 	log.Printf("Gathering metrics for database: %s", databaseName)
 	rows, err := mysql.Query(
 		"select table_schema,table_name,table_rows,data_length,index_length from tables where table_schema = ?",
 		databaseName)
 	if err != nil {
-		log.Fatalf("Encountered error performing query, %s", err)
+		log.Printf("Encountered error performing query, %s", err)
 	}
 	defer rows.Close()
 	for rows.Next() {
 		rows.Scan(&tblMetrics.schemaName, &tblMetrics.tableName, &rowCount, &dataSize, &indexSize)
-		totalSizeMB = float64(float64(dataSize+indexSize) / 1024 / 1024)
+		totalSize = dataSize + indexSize
 		tblMetrics.metrics = []Metric{
 			{"row_count", rowCount},
 			{"data_size", dataSize},
 			{"index_size", indexSize},
-			{"total_size", totalSizeMB},
+			{"total_size", totalSize},
 		}
 		metricList = append(metricList, tblMetrics)
-		fmt.Printf("schema: %s, name: %s, rows: %v, datassize: %.0f, indexsize: %v, totalsize: %.2f MB\n",
+		log.Printf("schema: %s, name: %s, rows: %v, datassize: %.0f, indexsize: %v, totalsize: %.0f\n",
 			tblMetrics.schemaName, tblMetrics.tableName,
-			rowCount, dataSize, indexSize, totalSizeMB)
+			rowCount, dataSize, indexSize, totalSize)
 	}
 	return
 }
 
 func configCheck() {
-	envs := []string{"DB_USER", "MYSQL_ROOT_PW", "DB_HOSTNAME", "ENVIRONMENT", "DD_API_KEY", "DD_APP_KEY"}
+	envs := []string{"DB_USER", "MYSQL_ROOT_PW", "DB_HOSTNAME", "ENVIRONMENT", "DD_API_KEY", "DD_APP_KEY", "DB_LIST"}
 	for _, env := range envs {
 		if os.Getenv(env) == "" {
+			//log.Printf("ENV VAR %s is set to %s\n", env, os.Getenv(env))
 			log.Fatalf("Required Environment variable %s is not set", env)
 		}
 	}
 }
 
-func main() {
 func process() {
 	configCheck()
 	con := connectionParams{
@@ -102,8 +103,11 @@ func process() {
 		defaultDB: "information_schema",
 	}
 	mysqlConnection := establishDBConnection(con)
-	metricList := gatherTableMetrics("counter_db", mysqlConnection)
-	_ = metricList
+	dbNames := strings.Split(os.Getenv("DB_LIST"), ",")
+	for _, dbName := range dbNames {
+		metricList := gatherTableMetrics(dbName, mysqlConnection)
+		_ = metricList
+	}
 	//postTableMetrics(metricList)
 }
 
