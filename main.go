@@ -4,10 +4,8 @@ import "database/sql"
 import (
 	"fmt"
 	_ "github.com/go-sql-driver/mysql"
-	"github.com/zorkian/go-datadog-api"
 	"log"
 	"os"
-	"time"
 )
 
 //Table Metrics is a container around metrics, a Schema Name and Table name has multiple metrics
@@ -80,42 +78,6 @@ func gatherTableMetrics(databaseName string, mysql sql.DB) (metricList []tableMe
 			rowCount, dataSize, indexSize, totalSizeMB)
 	}
 	return
-}
-
-func metricPayload(metricGroup tableMetrics, timestamp float64) (payloads []datadog.Metric) {
-	tableMetrics := metricGroup.metrics
-	for _, tableMetric := range tableMetrics {
-		payloads = append(payloads, datadog.Metric{
-			Metric: fmt.Sprintf("rds.db.table_metrics.%s", tableMetric.name),
-			Points: []datadog.DataPoint{datadog.DataPoint{timestamp, tableMetric.value}},
-			Host:   "sjp.db.local", //todo, add correct var
-			Tags:   metricTags(&metricGroup),
-		})
-	}
-	return
-}
-
-func metricTags(metricGroup *tableMetrics) []string {
-	return []string{
-		fmt.Sprintf("schema_name:%s", metricGroup.schemaName),
-		fmt.Sprintf("table_name:%s", metricGroup.tableName),
-		fmt.Sprintf("environment:%s", os.Getenv("ENVIRONMENT")),
-		//fmt.Sprintf("db_hostname:%s", DB_HOST),
-		//fmt.Sprintf("aws_account", AWS_ACCT),
-	}
-}
-
-func postTableMetrics(metricList []tableMetrics) {
-	if len(metricList) < 1 {
-		log.Print("No records returned")
-		return
-	}
-	ddClient := datadog.NewClient(os.Getenv("DD_API_KEY"), os.Getenv("DD_APP_KEY"))
-	timestamp := float64(time.Now().Unix())
-	for _, metricGroup := range metricList {
-		ddClient.PostMetrics(metricPayload(metricGroup, timestamp))
-	}
-
 }
 
 func configCheck() {
