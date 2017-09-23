@@ -2,7 +2,9 @@ package main
 
 import "database/sql"
 import (
+	"encoding/json"
 	"fmt"
+	"github.com/eawsy/aws-lambda-go-core/service/lambda/runtime"
 	_ "github.com/go-sql-driver/mysql"
 	"log"
 	"os"
@@ -90,6 +92,7 @@ func configCheck() {
 }
 
 func main() {
+func process() {
 	configCheck()
 	con := connectionParams{
 		user:      os.Getenv("DB_USER"),
@@ -102,4 +105,15 @@ func main() {
 	metricList := gatherTableMetrics("counter_db", mysqlConnection)
 	_ = metricList
 	//postTableMetrics(metricList)
+}
+
+func Handle(evt json.RawMessage, ctx *runtime.Context) (interface{}, error) {
+	process()
+	return "done", nil
+}
+
+func main() {
+	var evt = json.RawMessage{}
+	var ctx = runtime.Context{}
+	Handle(evt, &ctx)
 }
