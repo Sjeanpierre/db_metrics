@@ -19,11 +19,11 @@ var (
 //Table Metrics is a container around metrics, a Schema Name and Table name has multiple metrics
 type tableMetrics struct {
 	schemaName, tableName string
-	metrics               []Metric
+	metrics               []metric
 }
 
-//Metric is an individual metric point from a table
-type Metric struct {
+//metric is an individual data point from a table
+type metric struct {
 	name  string
 	value float64
 }
@@ -45,7 +45,7 @@ func (con *connectionParams) mysqlDSN() string {
 
 // Establish DB connection takes connection parameters and establishes a connection to MySQl
 // The connection is then validated using the Ping function from the MySQL lib
-func establishDBConnection(connectionDetails connectionParams) sql.DB {
+func connect(connectionDetails connectionParams) sql.DB {
 	db, err := sql.Open("mysql", connectionDetails.mysqlDSN())
 	if err != nil {
 		log.Fatalf("Could not establish DB connection, %s", err) //todo, return error message up to caller
@@ -58,7 +58,7 @@ func establishDBConnection(connectionDetails connectionParams) sql.DB {
 	return *db
 }
 
-func gatherTableMetrics(databaseName string, mysql sql.DB) (metricList []tableMetrics) { //todo, return error
+func fetchMetrics(databaseName string, mysql sql.DB) (metricList []tableMetrics) { //todo, return error
 	tblMetrics := tableMetrics{}
 	var (
 		rowCount, dataSize, totalSize, indexSize float64
@@ -74,7 +74,7 @@ func gatherTableMetrics(databaseName string, mysql sql.DB) (metricList []tableMe
 	for rows.Next() {
 		rows.Scan(&tblMetrics.schemaName, &tblMetrics.tableName, &rowCount, &dataSize, &indexSize)
 		totalSize = dataSize + indexSize
-		tblMetrics.metrics = []Metric{
+		tblMetrics.metrics = []metric{
 			{"row_count", rowCount},
 			{"data_size", dataSize},
 			{"index_size", indexSize},
@@ -88,7 +88,7 @@ func gatherTableMetrics(databaseName string, mysql sql.DB) (metricList []tableMe
 	return
 }
 
-func configCheck() {
+func checkConfig() {
 	envs := []string{"DB_USER", "MYSQL_ROOT_PW", "DB_HOSTNAME", "ENVIRONMENT",
 		"DD_API_KEY", "DD_APP_KEY", "DB_LIST", "DATADOG_ENABLED"}
 
@@ -107,7 +107,7 @@ func configCheck() {
 }
 
 func process() {
-	configCheck()
+	checkConfig()
 	con := connectionParams{
 		user:      os.Getenv("DB_USER"),
 		password:  os.Getenv("MYSQL_ROOT_PW"),
@@ -115,10 +115,10 @@ func process() {
 		port:      "3306",
 		defaultDB: "information_schema",
 	}
-	mysqlConnection := establishDBConnection(con)
+	mysqlConnection := connect(con)
 	dbNames := strings.Split(os.Getenv("DB_LIST"), ",")
 	for _, dbName := range dbNames {
-		metricList := gatherTableMetrics(dbName, mysqlConnection)
+		metricList := fetchMetrics(dbName, mysqlConnection)
 		if DD_ENABLED {
 			postTableMetrics(metricList)
 		}
