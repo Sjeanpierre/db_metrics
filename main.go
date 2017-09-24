@@ -8,7 +8,12 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	"log"
 	"os"
+	"strconv"
 	"strings"
+)
+
+var (
+	DD_ENABLED = false
 )
 
 //Table Metrics is a container around metrics, a Schema Name and Table name has multiple metrics
@@ -84,13 +89,21 @@ func gatherTableMetrics(databaseName string, mysql sql.DB) (metricList []tableMe
 }
 
 func configCheck() {
-	envs := []string{"DB_USER", "MYSQL_ROOT_PW", "DB_HOSTNAME", "ENVIRONMENT", "DD_API_KEY", "DD_APP_KEY", "DB_LIST"}
+	envs := []string{"DB_USER", "MYSQL_ROOT_PW", "DB_HOSTNAME", "ENVIRONMENT",
+		"DD_API_KEY", "DD_APP_KEY", "DB_LIST", "DATADOG_ENABLED"}
+
 	for _, env := range envs {
 		if os.Getenv(env) == "" {
-			//log.Printf("ENV VAR %s is set to %s\n", env, os.Getenv(env))
 			log.Fatalf("Required Environment variable %s is not set", env)
 		}
 	}
+
+	ddEnabled, err := strconv.ParseBool(os.Getenv("DATADOG_ENABLED"))
+	if err != nil {
+		log.Fatal("Could not parse value for DATADOG_ENABLED environment varibable")
+	}
+	DD_ENABLED = ddEnabled
+	log.Printf("DATADOG_ENABLED set to %v", DD_ENABLED)
 }
 
 func process() {
@@ -106,9 +119,10 @@ func process() {
 	dbNames := strings.Split(os.Getenv("DB_LIST"), ",")
 	for _, dbName := range dbNames {
 		metricList := gatherTableMetrics(dbName, mysqlConnection)
-		_ = metricList
+		if DD_ENABLED {
+			postTableMetrics(metricList)
+		}
 	}
-	//postTableMetrics(metricList)
 }
 
 func Handle(evt json.RawMessage, ctx *runtime.Context) (interface{}, error) {
