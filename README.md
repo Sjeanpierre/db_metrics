@@ -1,4 +1,4 @@
-# DB metrics auditor
+# DB metric auditor
 Go utility which tracks table growth using MYSQL information schema
 
 The following information is pushed into Datadog and reported to stdout
