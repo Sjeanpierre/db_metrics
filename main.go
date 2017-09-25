@@ -1,7 +1,7 @@
 package main
 
-import "database/sql"
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"github.com/eawsy/aws-lambda-go-core/service/lambda/runtime"
@@ -45,17 +45,16 @@ func (con *connectionParams) mysqlDSN() string {
 
 // Establish DB connection takes connection parameters and establishes a connection to MySQl
 // The connection is then validated using the Ping function from the MySQL lib
-func connect(connectionDetails connectionParams) sql.DB {
+func connect(connectionDetails connectionParams) (sql.DB, error) {
 	db, err := sql.Open("mysql", connectionDetails.mysqlDSN())
 	if err != nil {
-		log.Fatalf("Could not establish DB connection, %s", err) //todo, return error message up to caller
-		os.Exit(1)
+		return nil, fmt.Errorf("Could not establish DB connection, %s", err)
 	}
 	err = db.Ping()
 	if err != nil {
-		log.Fatalf("Could not establish DB connection, %s", err) //todo, same as above
+		return nil, fmt.Errorf("Could not establish DB connection, %s", err)
 	}
-	return *db
+	return *db, nil
 }
 
 func fetchMetrics(databaseName string, mysql sql.DB) (metricList []tableMetrics) { //todo, return error
@@ -90,7 +89,7 @@ func fetchMetrics(databaseName string, mysql sql.DB) (metricList []tableMetrics)
 
 func checkConfig() {
 	envs := []string{"DB_USER", "MYSQL_ROOT_PW", "DB_HOSTNAME", "ENVIRONMENT",
-		"DD_API_KEY", "DD_APP_KEY", "DB_LIST", "DATADOG_ENABLED"}
+					 "DD_API_KEY", "DD_APP_KEY", "DB_LIST", "DATADOG_ENABLED"}
 
 	for _, env := range envs {
 		if os.Getenv(env) == "" {
@@ -115,7 +114,10 @@ func process() {
 		port:      "3306",
 		defaultDB: "information_schema",
 	}
-	mysqlConnection := connect(con)
+	mysqlConnection, err := connect(con)
+	if err != nil {
+		log.Fatal(err)
+	}
 	dbNames := strings.Split(os.Getenv("DB_LIST"), ",")
 	for _, dbName := range dbNames {
 		metricList := fetchMetrics(dbName, mysqlConnection)
