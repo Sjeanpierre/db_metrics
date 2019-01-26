@@ -1,6 +1,8 @@
+# Serverless directories
+.serverless
+
+# golang output binary directory
+bin
+
 .idea
 db_metrics.iml
-
-handler.zip
-
-handler.so

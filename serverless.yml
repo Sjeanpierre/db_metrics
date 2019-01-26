@@ -1,0 +1,41 @@
+service: db-metrics-tracker
+
+provider:
+  name: aws
+  runtime: go1.x
+  region: eu-west-1
+  profile: prod
+  stage: global
+  memorySize: 128
+  iamRoleStatements:
+    - Effect: "Allow"
+      Action:
+        - "ssm:DescribeParameters"
+        - "ssm:GetParameters"
+        - "ssm:GetParameter"
+        - "rds:DescribeDBInstances"
+        - "rds:ListTagsForResource"
+        - "ssm:*"
+      Resource: "*"
+
+
+package:
+ exclude:
+   - ./**
+ include:
+   - ./bin/**
+
+functions:
+  audit:
+    handler: bin/tracker
+    events:
+      - schedule: rate(24 hours)
+    environment:
+      SUMO_HOSTED_COLLECTOR_URL: ${env:SUMO_HOSTED_COLLECTOR_URL}
+      DEBUG: "false"
+    timeout: 300
+    vpc:
+      securityGroupIds:
+        - sg-ad77a5ca
+      subnetIds:
+        - subnet-2d5b9a5b
