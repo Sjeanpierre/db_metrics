@@ -83,7 +83,11 @@ func sendMetrics2Sumo(metrics tableMetrics, instance rDSInstance) {
 	if err != nil {
 		log.Printf("could not marshall data for %s into JSON, error : %s", instance.name, err)
 	}
-	c.SendWithHeaders(jsonData, "", headers)
+	err = c.SendWithHeaders(jsonData, "", headers)
+	if err != nil {
+		log.Printf("[Error] - encountered issue sending metrics to" +
+			" Sumo for schema %s on host %s, %s",metrics.schemaName,instance.name,err)
+	}
 }
 
 func prepDataForSumo(metrics tableMetrics, instanceName string) map[string]string {

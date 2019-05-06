@@ -69,7 +69,7 @@ func (instances rDSInstances) FilterOnTags(tagKey string, tagValue string) rDSIn
 	return returnSet
 }
 
-func ListRDSInstances(param ListRDSInstanceInput) (rDSInstances) {
+func ListRDSInstances(param ListRDSInstanceInput) rDSInstances {
 	log.Println("Listing RDS instances")
 	var rdsList rDSInstances
 	var wg sync.WaitGroup
